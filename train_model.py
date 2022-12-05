@@ -126,15 +126,15 @@ def train_model(data_dir, tokenizer_path, num_epochs):
     wandb.init(project="BDZ2")
 
     model = TranslationModel(
-        config["num_encoder_layers"],
-        config["num_decoder_layers"],
-        config["emb_size"],
-        config["dim_feedforward"],
-        config["n_head"],
+        config.num_encoder_layers,
+        config.num_decoder_layers,
+        config.emb_size,
+        config.dim_feedforward,
+        config.n_head,
         src_tokenizer.get_vocab_size,
         tgt_tokenizer.get_vocab_size,
-        config["dropout_prob"],
-        config["max_len"],
+        config.dropout_prob,
+        config.max_len,
         src_pad,
         tgt_pad,
     )
@@ -148,21 +148,21 @@ def train_model(data_dir, tokenizer_path, num_epochs):
 
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset,
-        config["batch_size"],
+        config.batch_size,
         collate_fn=train_dataset.collate_translation_data,
         shuffle=True
     )
     val_dataloader = torch.utils.data.DataLoader(
         val_dataset,
-        config["batch_size"],
+        config.batch_size,
         collate_fn=val_dataset.collate_translation_data,
         shuffle=False
     )
 
     criterion = torch.nn.CrossEntropyLoss(ignore_index=tgt_pad)
-    optimizer = Adam(model.parameters(), config["lr"])
+    optimizer = Adam(model.parameters(), config.lr)
     scheduler = OneCycleLR(
-        optimizer, max_lr=config["lr"], steps_per_epoch=len(train_dataloader), epochs=num_epochs, anneal_strategy="cos", pct_start=0.1
+        optimizer, max_lr=config.lr, steps_per_epoch=len(train_dataloader), epochs=num_epochs, anneal_strategy="cos", pct_start=0.1
     )
 
     for epoch in trange(1, num_epochs + 1):
