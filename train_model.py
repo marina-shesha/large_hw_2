@@ -16,14 +16,14 @@ from torch.optim.lr_scheduler import OneCycleLR
 from tqdm import tqdm
 
 class ModelConfig:
-    num_encoder_layers: int = 1,
-    num_decoder_layers: int = 1,
-    emb_size: int = 128,
-    dim_feedforward: int = 512,
-    n_head: int = 8,
-    dropout_prob: float = 0.1,
-    max_len: int = 256,
-    batch_size: int = 64,
+    num_encoder_layers: int = 1
+    num_decoder_layers: int = 1
+    emb_size: int = 128
+    dim_feedforward: int = 512
+    n_head: int = 8
+    dropout_prob: float = 0.1
+    max_len: int = 256
+    batch_size: int = 64
     lr: float = 1e-3
 
 
