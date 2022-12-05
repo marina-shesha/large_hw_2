@@ -1,7 +1,7 @@
 import torch
 from sacremoses import MosesDetokenizer, MosesPunctNormalizer
 from tokenizers import Tokenizer
-
+from typing import List
 from model import TranslationModel
 
 # it's a surprise tool that will help you later
@@ -78,12 +78,12 @@ def _beam_search_decode(
 @torch.inference_mode()
 def translate(
     model: torch.nn.Module,
-    src_sentences: list[str],
+    src_sentences: List[str],
     src_tokenizer: Tokenizer,
     tgt_tokenizer: Tokenizer,
     translation_mode: str,
     device: torch.device,
-) -> list[str]:
+) -> List[str]:
     """
     Given a list of sentences, generate their translations.
     :param model: the model to use for translation
