@@ -49,7 +49,7 @@ def train_epoch(
         src = batch["src"].to(device)
         tgt = batch["tgt"].to(device)
         tgt_input = tgt[:, :-1]
-        tgt_mask = generate_mask(tgt_input.shape[1])
+        tgt_mask = generate_mask(tgt_input.shape[1]).to(device)
         src_padding_mask = (src == src_pad).to(device)
         tgt_padding_mask = (tgt_input == tgt_pad).to(device)
 
@@ -83,7 +83,7 @@ def evaluate(model: TranslationModel, val_dataloader, criterion, device, src_tok
         src = batch["src"].to(device)
         tgt = batch["tgt"].to(device)
         tgt_input = tgt[:, :-1]
-        tgt_mask = generate_mask(tgt_input.shape[1])
+        tgt_mask = generate_mask(tgt_input.shape[1]).to(device)
         src_padding_mask = (src == src_pad).to(device)
         tgt_padding_mask = (tgt_input == tgt_pad).to(device)
 
