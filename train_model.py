@@ -204,14 +204,28 @@ def train_model(data_dir, tokenizer_path, num_epochs):
 
 
 def translate_test_set(model: TranslationModel, data_dir, tokenizer_path):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
-
+    model.to(device)
     greedy_translations = []
+
+    src_tokenizer = Tokenizer.from_file(str(tokenizer_path / "tokenizer_de.json"))
+    tgt_tokenizer = Tokenizer.from_file(str(tokenizer_path / "tokenizer_en.json"))
+
     with open(data_dir / "test.de.txt") as input_file, open(
         "answers_greedy.txt", "w+"
     ) as output_file:
-        # translate with greedy search
-        pass
+        for src in input_file:
+            out = translate(
+                model,
+                [src],
+                src_tokenizer,
+                tgt_tokenizer,
+                translation_mode='greedy',
+                device=device,
+            )
+            greedy_translations.append(out)
+        output_file.write(greedy_translations)
 
     beam_translations = []
     with open(data_dir / "test.de.txt") as input_file, open(

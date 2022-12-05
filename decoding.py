@@ -10,8 +10,8 @@ mpn = MosesPunctNormalizer()
 
 
 def generate_mask(sz):
-    mask = torch.triu(torch.ones((sz, sz)))
-    mask = torch.ones((sz, sz)).masked_fill(mask, float('-inf'))
+    mask = torch.triu(torch.ones((sz, sz)) == 1, diagonal=1)
+    mask = torch.zeros((sz, sz)).masked_fill(mask, float('-inf'))
     return mask
 
 
