@@ -7,27 +7,96 @@ from tokenizers import Tokenizer
 from tqdm import trange
 
 from data import TranslationDataset
-from decoding import translate
+from decoding import translate, generate_mask
 from model import TranslationModel
+import wandb
+
+from torch.optim import Adam
+from torch.optim.lr_scheduler import OneCycleLR
+from tqdm import tqdm
+
+class ModelConfig:
+    num_encoder_layers: int = 1,
+    num_decoder_layers: int = 1,
+    emb_size: int = 128,
+    dim_feedforward: int = 512,
+    n_head: int = 8,
+    dropout_prob: float = 0.1,
+    max_len: int = 256,
+    batch_size: int = 64,
+    lr: float = 1e-3
 
 
 def train_epoch(
     model: TranslationModel,
     train_dataloader,
+    scheduler,
     optimizer,
+    criterion,
     device,
+    src_tokenizer,
+    tgt_tokenizer,
 ):
     # train the model for one epoch
     # you can obviously add new arguments or change the API if it does not suit you
     model.train()
-    pass
+    model.to(device)
+    src_pad = src_tokenizer.token_to_id("[PAD]")
+    tgt_pad = tgt_tokenizer.token_to_id("[PAD]")
+    losses = 0
+    cnt = 0
+    for batch in tqdm(train_dataloader):
+        src = batch["src"].to(device)
+        tgt = batch["tgt"].to(device)
+        tgt_input = tgt[:, :-1]
+        tgt_mask = generate_mask(tgt_input.shape[1])
+        src_padding_mask = (src == src_pad).to(device)
+        tgt_padding_mask = (tgt_input == tgt_pad).to(device)
 
+        logits = model(src, tgt_input, tgt_mask,
+        src_padding_mask, tgt_padding_mask)
+
+        optimizer.zero_grad()
+        tgt_out = tgt[:, 1:]
+        loss = criterion(logits.reshape(-1, logits.shape[-1]), tgt_out.reshape(-1))
+        loss.backward()
+        optimizer.step()
+        scheduler.step()
+
+        losses += loss.item() * src.shape[0]
+        cnt += src.shape[0]
+        wandb.log({"loss": loss.cpu().item(), "lr": scheduler.get_last_lr()[0]})
+
+    return losses / cnt
 
 @torch.inference_mode()
-def evaluate(model: TranslationModel, val_dataloader, device):
+def evaluate(model: TranslationModel, val_dataloader, criterion, device, src_tokenizer,
+    tgt_tokenizer):
     # compute the loss over the entire validation subset
     model.eval()
-    pass
+    model.to(device)
+    src_pad = src_tokenizer.token_to_id("[PAD]")
+    tgt_pad = tgt_tokenizer.token_to_id("[PAD]")
+    losses = 0
+    cnt = 0
+    for batch in tqdm(val_dataloader):
+        src = batch["src"].to(device)
+        tgt = batch["tgt"].to(device)
+        tgt_input = tgt[:, :-1]
+        tgt_mask = generate_mask(tgt_input.shape[1])
+        src_padding_mask = (src == src_pad).to(device)
+        tgt_padding_mask = (tgt_input == tgt_pad).to(device)
+
+        logits = model(src, tgt_input, tgt_mask,
+        src_padding_mask, tgt_padding_mask)
+
+        tgt_out = tgt[:, 1:]
+        loss = criterion(logits.reshape(-1, logits.shape[-1]), tgt_out.reshape(-1))
+
+        losses += loss.item() * src.shape[0]
+        cnt += src.shape[0]
+
+    return losses / cnt
 
 
 def train_model(data_dir, tokenizer_path, num_epochs):
@@ -48,12 +117,26 @@ def train_model(data_dir, tokenizer_path, num_epochs):
         tgt_tokenizer,
         max_len=128,
     )
-
+    config = ModelConfig()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.manual_seed(0)
+    src_pad = src_tokenizer.token_to_id("[PAD]")
+    tgt_pad = tgt_tokenizer.token_to_id("[PAD]")
+
+    wandb.init(project="BDZ2")
 
     model = TranslationModel(
-        # your code here
+        config["num_encoder_layers"],
+        config["num_decoder_layers"],
+        config["emb_size"],
+        config["dim_feedforward"],
+        config["n_head"],
+        src_tokenizer.get_vocab_size,
+        tgt_tokenizer.get_vocab_size,
+        config["dropout_prob"],
+        config["max_len"],
+        src_pad,
+        tgt_pad,
     )
     model.to(device)
 
@@ -63,12 +146,47 @@ def train_model(data_dir, tokenizer_path, num_epochs):
 
     min_val_loss = float("inf")
 
-    for epoch in trange(1, num_epochs + 1):
+    train_dataloader = torch.utils.data.DataLoader(
+        train_dataset,
+        config["batch_size"],
+        collate_fn=train_dataset.collate_translation_data,
+        shuffle=True
+    )
+    val_dataloader = torch.utils.data.DataLoader(
+        val_dataset,
+        config["batch_size"],
+        collate_fn=val_dataset.collate_translation_data,
+        shuffle=False
+    )
 
-        train_loss = train_epoch()
-        val_loss = evaluate()
+    criterion = torch.nn.CrossEntropyLoss(ignore_index=tgt_pad)
+    optimizer = Adam(model.parameters(), config["lr"])
+    scheduler = OneCycleLR(
+        optimizer, max_lr=config["lr"], steps_per_epoch=len(train_dataloader), epochs=num_epochs, anneal_strategy="cos", pct_start=0.1
+    )
+
+    for epoch in trange(1, num_epochs + 1):
+        train_loss = train_epoch(
+            model,
+            train_dataloader,
+            scheduler,
+            optimizer,
+            criterion,
+            device,
+            src_tokenizer,
+            tgt_tokenizer
+        )
+        val_loss = evaluate(
+            model,
+            val_dataloader,
+            criterion,
+            device,
+            src_tokenizer,
+            tgt_tokenizer
+        )
 
         # might be useful to translate some sentences from validation to check your decoding implementation
+        wandb.log({"val_loss": val_loss, "train_loss": train_loss, "epoch": epoch})
 
         # also, save the best checkpoint somewhere around here
         if val_loss < min_val_loss:

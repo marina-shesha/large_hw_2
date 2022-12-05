@@ -121,7 +121,7 @@ class TranslationDataset(Dataset):
             for line in f.readlines():
                 line = line.strip()
                 self.src_lines.append(line)
-                self.src_ids.append(torch.tensor(self.src_tokenizer.encode(line).ids))
+                self.src_ids.append(torch.tensor(self.src_tokenizer.encode(line).ids).type(torch.long))
 
         self.tgt_lines = []
         self.tgt_ids = []
@@ -129,7 +129,7 @@ class TranslationDataset(Dataset):
             for line in f.readlines():
                 line = line.strip()
                 self.tgt_lines.append(line)
-                self.tgt_ids.append(torch.tensor(self.tgt_tokenizer.encode(line).ids))
+                self.tgt_ids.append(torch.tensor(self.tgt_tokenizer.encode(line).ids).type(torch.long))
 
     def __len__(self):
         return len(self.tgt_lines)

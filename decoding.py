@@ -9,6 +9,12 @@ detok = MosesDetokenizer(lang="en")
 mpn = MosesPunctNormalizer()
 
 
+def generate_mask(sz):
+    mask = torch.triu(torch.ones((sz, sz)))
+    mask = torch.ones((sz, sz)).masked_fill(mask, float('-inf'))
+    return mask
+
+
 def _greedy_decode(
     model: TranslationModel,
     src: torch.Tensor,
@@ -27,7 +33,24 @@ def _greedy_decode(
     :param device: device that the model runs on
     :return: a (batch, time) tensor with predictions
     """
-    pass
+    src.to(device)
+    model.to(device)
+    model.eval()
+    pad = tgt_tokenizer.token_to_id("[PAD]")
+    bos = tgt_tokenizer.token_to_id("[BOS]")
+    eos = tgt_tokenizer.token_to_id("[EOS]")
+    src_mask = (src == pad)
+    memory = model.encode(src, src_mask)
+    batch_sz = src.shape[0]
+    res = torch.ones(batch_sz, 1).fill_(bos).to(device)
+    for i in range(max_len-1):
+        tgt_mask = generate_mask(res.size(1)).to(device)
+        out = model.decode(res, memory, tgt_mask)
+        next_word = torch.argmax(out, dim=-1)
+        res = torch.cat([res, next_word[None]], dim=1)
+        if torch.all(next_word == eos):
+            break
+    return res
 
 
 def _beam_search_decode(
@@ -70,4 +93,19 @@ def translate(
     :param translation_mode: either "greedy", "beam" or anything more advanced
     :param device: device that the model runs on
     """
-    pass
+    src_pad = src_tokenizer.token_to_id("[PAD]")
+    src = []
+    for line in src_sentences:
+        src.append((torch.tensor(src_tokenizer.encode(line).ids).type(torch.long)))
+    src = torch.nn.utils.rnn.pad_sequence(
+        sequences=src,
+        batch_first=True,
+        padding_value=src_pad
+    )
+    max_len = src.tensor.shape[1]
+    if translation_mode == "greedy":
+        out = _greedy_decode(model, src, max_len, tgt_tokenizer, device)
+    elif translation_mode == "beam":
+        out = _beam_search_decode(model, src, max_len, tgt_tokenizer, device)
+    out = tgt_tokenizer.decode_batch(out).text
+    return out
