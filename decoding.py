@@ -102,7 +102,7 @@ def translate(
         batch_first=True,
         padding_value=src_pad
     )
-    max_len = src.tensor.shape[1]
+    max_len = src.shape[1]
     if translation_mode == "greedy":
         out = _greedy_decode(model, src, max_len, tgt_tokenizer, device)
     elif translation_mode == "beam":
