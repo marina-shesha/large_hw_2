@@ -46,7 +46,6 @@ def _greedy_decode(
     for i in range(max_len-1):
         tgt_mask = generate_mask(res.size(1)).to(device)
         out = model.decode(res, memory, tgt_mask)
-        print(out)
         next_word = torch.argmax(out, dim=-1)
         res = torch.cat([res, next_word[None]], dim=1)
         if torch.all(next_word == eos):
@@ -110,5 +109,6 @@ def translate(
         out = _greedy_decode(model, src, max_len, tgt_tokenizer, src_mask, device)
     elif translation_mode == "beam":
         out = _beam_search_decode(model, src, max_len, tgt_tokenizer, device)
-    out = tgt_tokenizer.decode_batch(out).text
+    out = tgt_tokenizer.decode_batch(out.tolist()).text
+    print(out)
     return out
