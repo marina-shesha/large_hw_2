@@ -46,6 +46,7 @@ def _greedy_decode(
     for i in range(max_len-1):
         tgt_mask = generate_mask(res.size(1)).to(device)
         out = model.decode(res, memory, tgt_mask)
+        print(out)
         next_word = torch.argmax(out, dim=-1)
         res = torch.cat([res, next_word[None]], dim=1)
         if torch.all(next_word == eos):
