@@ -100,3 +100,4 @@ class TranslationModel(nn.Module):
         out = self.transformer.decoder(self.positional_encoding(
                           self.tgt_embedding(tgt_tokens)), memory=memory, tgt_mask=tgt_mask)
         out = self.linear(out[:, -1])
+        return out
