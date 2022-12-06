@@ -45,6 +45,8 @@ def train_epoch(
     tgt_pad = tgt_tokenizer.token_to_id("[PAD]")
     losses = 0
     cnt = 0
+    i = 0
+    save_period = 5
     for batch in tqdm(train_dataloader):
         src = batch["src"].to(device)
         tgt = batch["tgt"].to(device)
@@ -65,9 +67,11 @@ def train_epoch(
 
         losses += loss.item() * src.shape[0]
         cnt += src.shape[0]
-        wandb.log({"loss": loss.cpu().item(), "lr": scheduler.get_last_lr()[0]})
-
+        if i % save_period == 0:
+            wandb.log({"loss": loss.cpu().item(), "lr": scheduler.get_last_lr()[0]})
+        i += 1
     return losses / cnt
+
 
 @torch.inference_mode()
 def evaluate(model: TranslationModel, val_dataloader, criterion, device, src_tokenizer,

@@ -42,7 +42,7 @@ def _greedy_decode(
     eos = tgt_tokenizer.token_to_id("[EOS]")
     memory = model.encode(src, src_mask.to(device))
     batch_sz = src.shape[0]
-    res = torch.ones(batch_sz, 1).fill_(bos).to(device)
+    res = torch.ones(batch_sz, 1).fill_(bos).type(torch.long).to(device)
     for i in range(max_len-1):
         tgt_mask = generate_mask(res.size(1)).to(device)
         out = model.decode(res, memory, tgt_mask)
