@@ -37,7 +37,6 @@ def _greedy_decode(
     src = src.to(device)
     model.to(device)
     model.eval()
-    pad = tgt_tokenizer.token_to_id("[PAD]")
     bos = tgt_tokenizer.token_to_id("[BOS]")
     eos = tgt_tokenizer.token_to_id("[EOS]")
     memory = model.encode(src, src_mask.to(device))
@@ -109,6 +108,6 @@ def translate(
         out = _greedy_decode(model, src, max_len, tgt_tokenizer, src_mask, device)
     elif translation_mode == "beam":
         out = _beam_search_decode(model, src, max_len, tgt_tokenizer, device)
-    out = tgt_tokenizer.decode_batch(out.tolist())
+    out = tgt_tokenizer.decode_batch(list(out))
     print(out)
     return out

@@ -143,6 +143,8 @@ def train_model(data_dir, tokenizer_path, num_epochs):
         tgt_pad,
     )
     model.to(device)
+    pytorch_total_params = sum(p.numel() for p in model.parameters())
+    print("count_parametrs:", pytorch_total_params)
 
     # create loss, optimizer, scheduler objects, dataloaders etc.
     # don't forget about collate_fn
@@ -222,14 +224,14 @@ def translate_test_set(model: TranslationModel, data_dir, tokenizer_path):
         for src in input_file:
             out = translate(
                 model,
-                [src],
+                [src.strip()],
                 src_tokenizer,
                 tgt_tokenizer,
                 translation_mode='greedy',
                 device=device,
             )
-            greedy_translations.append(out)
-        output_file.write(greedy_translations)
+            greedy_translations.append(out[0])
+            output_file.write(out[0])
 
     beam_translations = []
     with open(data_dir / "test.de.txt") as input_file, open(
