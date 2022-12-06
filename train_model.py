@@ -247,10 +247,12 @@ def translate_test_set(model: TranslationModel, data_dir, tokenizer_path):
     bleu_greedy = bleu.corpus_score(greedy_translations, [references]).score
 
     # we're recreating the object, as it might cache some stats
-    bleu = BLEU()
-    bleu_beam = bleu.corpus_score(beam_translations, [references]).score
 
-    print(f"BLEU with greedy search: {bleu_greedy}, with beam search: {bleu_beam}")
+    # bleu = BLEU()
+    # bleu_beam = bleu.corpus_score(beam_translations, [references]).score
+    #
+    # print(f"BLEU with greedy search: {bleu_greedy}, with beam search: {bleu_beam}")
+    print(f"BLEU with greedy search: {bleu_greedy}")
     # maybe log to wandb/comet/neptune as well
 
 

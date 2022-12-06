@@ -109,5 +109,4 @@ def translate(
     elif translation_mode == "beam":
         out = _beam_search_decode(model, src, max_len, tgt_tokenizer, device)
     out = tgt_tokenizer.decode_batch(list(out.cpu().numpy()))
-    print(out)
     return out
