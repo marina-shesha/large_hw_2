@@ -109,6 +109,6 @@ def translate(
         out = _greedy_decode(model, src, max_len, tgt_tokenizer, src_mask, device)
     elif translation_mode == "beam":
         out = _beam_search_decode(model, src, max_len, tgt_tokenizer, device)
-    out = tgt_tokenizer.decode_batch(out.tolist()).text
+    out = tgt_tokenizer.decode_batch(out.tolist())
     print(out)
     return out
