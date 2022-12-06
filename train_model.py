@@ -68,7 +68,7 @@ def train_epoch(
         losses += loss.item() * src.shape[0]
         cnt += src.shape[0]
         if i % save_period == 0:
-            wandb.log({"loss": loss.cpu().item(), "lr": scheduler.get_last_lr()[0]})
+            wandb.log({"loss_training": loss.cpu().item(), "lr": scheduler.get_last_lr()[0]})
         i += 1
     return losses / cnt
 
@@ -192,7 +192,8 @@ def train_model(data_dir, tokenizer_path, num_epochs):
         )
 
         # might be useful to translate some sentences from validation to check your decoding implementation
-        wandb.log({"val_loss": val_loss, "train_loss": train_loss, "epoch": epoch})
+        bleu_greedy = translate_test_set(model, data_dir, tokenizer_path)
+        wandb.log({"val_loss": val_loss, "train_loss": train_loss, "epoch": epoch, "blue_test": bleu_greedy})
 
         # also, save the best checkpoint somewhere around here
         if val_loss < min_val_loss:
@@ -254,6 +255,7 @@ def translate_test_set(model: TranslationModel, data_dir, tokenizer_path):
     # print(f"BLEU with greedy search: {bleu_greedy}, with beam search: {bleu_beam}")
     print(f"BLEU with greedy search: {bleu_greedy}")
     # maybe log to wandb/comet/neptune as well
+    return bleu_greedy
 
 
 if __name__ == "__main__":
