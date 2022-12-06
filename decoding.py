@@ -39,7 +39,7 @@ def _greedy_decode(
     pad = tgt_tokenizer.token_to_id("[PAD]")
     bos = tgt_tokenizer.token_to_id("[BOS]")
     eos = tgt_tokenizer.token_to_id("[EOS]")
-    src_mask = (src == pad)
+    src_mask = (src == pad).to(device)
     memory = model.encode(src, src_mask)
     batch_sz = src.shape[0]
     res = torch.ones(batch_sz, 1).fill_(bos).to(device)
