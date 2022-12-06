@@ -99,4 +99,4 @@ class TranslationModel(nn.Module):
     def decode(self, tgt_tokens: Tensor, memory: Tensor, tgt_mask: Tensor):
         out = self.transformer.decoder(self.positional_encoding(
                           self.tgt_embedding(tgt_tokens)), memory=memory, tgt_mask=tgt_mask)
-        out = self.linear(out.transpose(0, 1)[:, -1])
+        out = self.linear(out[:, -1])

@@ -12,7 +12,7 @@ mpn = MosesPunctNormalizer()
 def generate_mask(sz):
     mask = torch.triu(torch.ones((sz, sz)) == 1, diagonal=1)
     mask = torch.zeros((sz, sz)).masked_fill(mask, float('-inf'))
-    return mask
+    return mask.type(torch.bool)
 
 
 def _greedy_decode(
@@ -20,6 +20,7 @@ def _greedy_decode(
     src: torch.Tensor,
     max_len: int,
     tgt_tokenizer: Tokenizer,
+    src_mask,
     device: torch.device,
 ) -> torch.Tensor:
     """
@@ -39,7 +40,6 @@ def _greedy_decode(
     pad = tgt_tokenizer.token_to_id("[PAD]")
     bos = tgt_tokenizer.token_to_id("[BOS]")
     eos = tgt_tokenizer.token_to_id("[EOS]")
-    src_mask = (src == pad)
     memory = model.encode(src, src_mask.to(device))
     batch_sz = src.shape[0]
     res = torch.ones(batch_sz, 1).fill_(bos).to(device)
@@ -103,8 +103,10 @@ def translate(
         padding_value=src_pad
     )
     max_len = src.shape[1]
+
     if translation_mode == "greedy":
-        out = _greedy_decode(model, src, max_len, tgt_tokenizer, device)
+        src_mask = src == src_pad
+        out = _greedy_decode(model, src, max_len, tgt_tokenizer, src_mask, device)
     elif translation_mode == "beam":
         out = _beam_search_decode(model, src, max_len, tgt_tokenizer, device)
     out = tgt_tokenizer.decode_batch(out).text
