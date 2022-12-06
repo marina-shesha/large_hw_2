@@ -33,14 +33,14 @@ def _greedy_decode(
     :param device: device that the model runs on
     :return: a (batch, time) tensor with predictions
     """
-    src.to(device)
+    src = src.to(device)
     model.to(device)
     model.eval()
     pad = tgt_tokenizer.token_to_id("[PAD]")
     bos = tgt_tokenizer.token_to_id("[BOS]")
     eos = tgt_tokenizer.token_to_id("[EOS]")
-    src_mask = (src == pad).to(device)
-    memory = model.encode(src, src_mask)
+    src_mask = (src == pad)
+    memory = model.encode(src, src_mask.to(device))
     batch_sz = src.shape[0]
     res = torch.ones(batch_sz, 1).fill_(bos).to(device)
     for i in range(max_len-1):
