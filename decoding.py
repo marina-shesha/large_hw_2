@@ -45,7 +45,6 @@ def _greedy_decode(
     res = torch.ones(batch_sz, 1).fill_(bos).type(torch.long).to(device)
     for i in range(max_len-1):
         tgt_mask = generate_mask(res.size(1)).to(device)
-        print(res)
         out = model.decode(res, memory, tgt_mask)
         next_word = torch.argmax(out, dim=-1)
         res = torch.cat([res, next_word[None]], dim=1)
@@ -74,6 +73,7 @@ def _beam_search_decode_one_batch(
     probs = torch.ones(beam_size, 1).type(torch.long).to(device)
     for j in range(max_len-1):
         tgt_mask = generate_mask(res.size(1)).to(device)
+        print(res)
         out = model.decode(res, memory, tgt_mask)
         prob_k, next_word = torch.topk(out, beam_size, dim=-1)
         probs, res = get_beams(res, probs, prob_k, next_word)
