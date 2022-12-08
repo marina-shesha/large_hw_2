@@ -245,10 +245,10 @@ def translate_test_set(model: TranslationModel, data_dir, tokenizer_path):
                 [src.strip()],
                 src_tokenizer,
                 tgt_tokenizer,
-                translation_mode='greedy',
+                translation_mode='beam',
                 device=device,
             )
-            greedy_translations.append(out[0])
+            beam_translations.append(out[0])
             output_file.write(out[0])
 
     with open(data_dir / "test.en.txt") as input_file:
@@ -257,13 +257,13 @@ def translate_test_set(model: TranslationModel, data_dir, tokenizer_path):
     bleu = BLEU()
     bleu_greedy = bleu.corpus_score(greedy_translations, [references]).score
 
-    # we're recreating the object, as it might cache some stats
+    #we're recreating the object, as it might cache some stats
 
-    # bleu = BLEU()
-    # bleu_beam = bleu.corpus_score(beam_translations, [references]).score
-    #
-    # print(f"BLEU with greedy search: {bleu_greedy}, with beam search: {bleu_beam}")
-    print(f"BLEU with greedy search: {bleu_greedy}")
+    bleu = BLEU()
+    bleu_beam = bleu.corpus_score(beam_translations, [references]).score
+
+    print(f"BLEU with greedy search: {bleu_greedy}, with beam search: {bleu_beam}")
+
     # maybe log to wandb/comet/neptune as well
     return bleu_greedy
 
