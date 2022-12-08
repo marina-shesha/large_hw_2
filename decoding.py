@@ -45,6 +45,7 @@ def _greedy_decode(
     res = torch.ones(batch_sz, 1).fill_(bos).type(torch.long).to(device)
     for i in range(max_len-1):
         tgt_mask = generate_mask(res.size(1)).to(device)
+        print(res)
         out = model.decode(res, memory, tgt_mask)
         next_word = torch.argmax(out, dim=-1)
         res = torch.cat([res, next_word[None]], dim=1)
