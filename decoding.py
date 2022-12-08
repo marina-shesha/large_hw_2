@@ -68,7 +68,7 @@ def _beam_search_decode_one_batch(
     pad = tgt_tokenizer.token_to_id("[PAD]")
     bos = tgt_tokenizer.token_to_id("[BOS]")
     eos = tgt_tokenizer.token_to_id("[EOS]")
-    src = src.repeat(beam_size)
+    src = src.repeat(beam_size, 1)
     print(src.shape)
     memory = model.encode(src, src_mask.to(device))
     res = torch.ones(beam_size, 1).fill_(bos).type(torch.long).to(device)
