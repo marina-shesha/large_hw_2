@@ -76,10 +76,10 @@ def _beam_search_decode_one_batch(
     probs = torch.ones(beam_size, 1).type(torch.long).to(device)
     for j in range(max_len-1):
         tgt_mask = generate_mask(res.size(1)).to(device)
-        print(res)
         out = model.decode(res, memory, tgt_mask)
         prob_k, next_word = torch.topk(out, beam_size, dim=-1)
         probs, res = get_beams(res, probs, prob_k, next_word, beam_size)
+        print(res, probs)
         if torch.all(res[:, -1] == eos):
             break
     return res
