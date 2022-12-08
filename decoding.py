@@ -69,8 +69,7 @@ def _beam_search_decode_one_batch(
     bos = tgt_tokenizer.token_to_id("[BOS]")
     eos = tgt_tokenizer.token_to_id("[EOS]")
     src = src.repeat(beam_size, 1)
-    src_mask = src_mask.repeat(beam_size,1)
-    print(src.shape)
+    src_mask = src_mask.repeat(beam_size, 1)
     memory = model.encode(src, src_mask.to(device))
     res = torch.ones(beam_size, 1).fill_(bos).type(torch.long).to(device)
     probs = torch.ones(beam_size, 1).type(torch.long).to(device)
@@ -79,7 +78,7 @@ def _beam_search_decode_one_batch(
         out = model.decode(res, memory, tgt_mask)
         prob_k, next_word = torch.topk(out, beam_size, dim=-1)
         probs, res = get_beams(res, probs, prob_k, next_word, beam_size)
-        #print(res, probs)
+        print(prob_k, next_word )
         if torch.all(res[:, -1] == eos):
             break
     return res
@@ -92,7 +91,6 @@ def get_beams(res, probs, prob_k, next_word, beam_size):
         for j, word in enumerate(next_word[i, :]):
             all_res.append(torch.cat([cur_res, word[None]]))
             all_probs.append(probs[i]*prob_k[i][j])
-    print(all_res)
     all_probs = torch.cat(all_probs, dim=-1)
     all_res = torch.cat(all_res, dim=0)
     new_prob, idx = torch.topk(all_probs, beam_size)
