@@ -3,6 +3,7 @@ from sacremoses import MosesDetokenizer, MosesPunctNormalizer
 from tokenizers import Tokenizer
 from typing import List
 from model import TranslationModel
+from collections import defaultdict
 
 # it's a surprise tool that will help you later
 detok = MosesDetokenizer(lang="en")
@@ -52,26 +53,46 @@ def _greedy_decode(
     return res
 
 
-def _beam_search_decode(
+def _beam_search_decode_one_batch(
     model: TranslationModel,
     src: torch.Tensor,
     max_len: int,
     tgt_tokenizer: Tokenizer,
     device: torch.device,
+    src_mask,
     beam_size: int,
 ) -> torch.Tensor:
-    """
-    Given a batch of source sequences, predict its translations with beam search.
-    The decoding procedure terminates once max_len steps have passed.
-    :param model: the model to use for translation
-    :param src: a (batch, time) tensor of source sentence tokens
-    :param max_len: the maximum length of predictions
-    :param tgt_tokenizer: target language tokenizer
-    :param device: device that the model runs on
-    :param beam_size: the number of hypotheses
-    :return: a (batch, time) tensor with predictions
-    """
-    pass
+    src = src.to(device)
+    model.to(device)
+    model.eval()
+    pad = tgt_tokenizer.token_to_id("[PAD]")
+    bos = tgt_tokenizer.token_to_id("[BOS]")
+    eos = tgt_tokenizer.token_to_id("[EOS]")
+    memory = model.encode(src, src_mask.to(device))
+    res = torch.ones(beam_size, 1).fill_(bos).type(torch.long).to(device)
+    probs = torch.ones(beam_size, 1).type(torch.long).to(device)
+    for j in range(max_len-1):
+        tgt_mask = generate_mask(res.size(1)).to(device)
+        out = model.decode(res, memory, tgt_mask)
+        prob_k, next_word = torch.topk(out, beam_size, dim=-1)
+        probs, res = get_beams(res, probs, prob_k, next_word)
+        if torch.all(res[:, -1] == eos):
+            break
+    return res
+
+
+def get_beams(res, probs, prob_k, next_word, beam_size):
+    all_res = []
+    all_probs = []
+    for i, cur_res in enumerate(res):
+        for j, word in enumerate(next_word[i, :]):
+            all_res.append(torch.cat([cur_res, word[None]]))
+            all_probs.append(probs[i]*prob_k[i][j])
+    all_probs = torch.cat(all_probs, dim=-1)
+    all_res = torch.cat(all_res, dim=-1)
+    new_prob, idx = torch.topk(all_probs, beam_size)
+    new_res = all_res[idx]
+    return new_prob, new_res
 
 
 @torch.inference_mode()
@@ -107,6 +128,7 @@ def translate(
         src_mask = src == src_pad
         out = _greedy_decode(model, src, max_len, tgt_tokenizer, src_mask, device)
     elif translation_mode == "beam":
-        out = _beam_search_decode(model, src, max_len, tgt_tokenizer, device)
+        src_mask = src == src_pad
+        out = _beam_search_decode_one_batch(model, src, max_len, tgt_tokenizer, device, src_mask)
     out = tgt_tokenizer.decode_batch(list(out.cpu().numpy()))
     return out

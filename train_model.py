@@ -239,7 +239,17 @@ def translate_test_set(model: TranslationModel, data_dir, tokenizer_path):
         "answers_beam.txt", "w+"
     ) as output_file:
         # translate with beam search
-        pass
+        for src in input_file:
+            out = translate(
+                model,
+                [src.strip()],
+                src_tokenizer,
+                tgt_tokenizer,
+                translation_mode='greedy',
+                device=device,
+            )
+            greedy_translations.append(out[0])
+            output_file.write(out[0])
 
     with open(data_dir / "test.en.txt") as input_file:
         references = [line.strip() for line in input_file]
