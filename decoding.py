@@ -77,24 +77,24 @@ def _beam_search_decode_one_batch(
         tgt_mask = generate_mask(res.size(1)).to(device)
         out = model.decode(res, memory, tgt_mask)
         prob_k, next_word = torch.topk(out, beam_size, dim=-1)
-        probs, res = get_beams(res, probs, prob_k, next_word, beam_size)
+        probs, res = get_beams(res, probs, prob_k, next_word, beam_size, device)
         if torch.all(res[:, -1] == eos):
             break
     return res
 
 
-def get_beams(res, probs, prob_k, next_word, beam_size):
+def get_beams(res, probs, prob_k, next_word, beam_size, device):
     all_res = []
     all_probs = []
     for i, cur_res in enumerate(res):
         for j, word in enumerate(next_word[i, :]):
-            print(cur_res, word)
-            all_res.append(torch.cat([cur_res, word[None]], dim=-1))
-            all_probs.append(probs[i]*prob_k[i][j])
-    all_probs = torch.cat(all_probs, dim=-1)
-    all_res = torch.cat(all_res, dim=0)
+            all_res.append(torch.cat([cur_res, word[None]], dim=-1).tolist())
+            all_probs.append(probs[i]*prob_k[i][j].tolist())
+    all_probs = torch.tensor(all_probs).to(device)
+    all_res = torch.tensor(all_res).to(device)
     new_prob, idx = torch.topk(all_probs, beam_size)
     new_res = all_res[idx]
+    print(new_prob, new_res)
     return new_prob, new_res
 
 
