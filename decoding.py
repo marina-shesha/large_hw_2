@@ -4,6 +4,7 @@ from tokenizers import Tokenizer
 from typing import List
 from model import TranslationModel
 from collections import defaultdict
+import numpy as np
 
 # it's a surprise tool that will help you later
 detok = MosesDetokenizer(lang="en")
@@ -17,12 +18,12 @@ def generate_mask(sz):
 
 
 def _greedy_decode(
-    model: TranslationModel,
-    src: torch.Tensor,
-    max_len: int,
-    tgt_tokenizer: Tokenizer,
-    src_mask,
-    device: torch.device,
+        model: TranslationModel,
+        src: torch.Tensor,
+        max_len: int,
+        tgt_tokenizer: Tokenizer,
+        src_mask,
+        device: torch.device,
 ) -> torch.Tensor:
     """
     Given a batch of source sequences, predict its translations with greedy search.
@@ -43,7 +44,7 @@ def _greedy_decode(
     memory = model.encode(src, src_mask.to(device))
     batch_sz = src.shape[0]
     res = torch.ones(batch_sz, 1).fill_(bos).type(torch.long).to(device)
-    for i in range(max_len-1):
+    for i in range(max_len - 1):
         tgt_mask = generate_mask(res.size(1)).to(device)
         out = model.decode(res, memory, tgt_mask)
         next_word = torch.argmax(out, dim=-1)
@@ -54,13 +55,13 @@ def _greedy_decode(
 
 
 def _beam_search_decode_one_batch(
-    model: TranslationModel,
-    src: torch.Tensor,
-    max_len: int,
-    tgt_tokenizer: Tokenizer,
-    device: torch.device,
-    src_mask,
-    beam_size: int,
+        model: TranslationModel,
+        src: torch.Tensor,
+        max_len: int,
+        tgt_tokenizer: Tokenizer,
+        device: torch.device,
+        src_mask,
+        beam_size: int,
 ) -> torch.Tensor:
     src = src.to(device)
     model.to(device)
@@ -73,14 +74,14 @@ def _beam_search_decode_one_batch(
     memory = model.encode(src, src_mask.to(device))
     res = torch.ones(beam_size, 1).fill_(bos).type(torch.long).to(device)
     probs = torch.ones(beam_size, 1).type(torch.long).to(device)
-    for j in range(max_len-1):
+    for j in range(max_len - 1):
         tgt_mask = generate_mask(res.size(1)).to(device)
-        out = model.decode(res, memory, tgt_mask)
+        out = torch.log_softmax(model.decode(res, memory, tgt_mask), dim=-1)
         prob_k, next_word = torch.topk(out, beam_size, dim=-1)
         probs, res = get_beams(res, probs, prob_k, next_word, beam_size, device)
         if torch.all(res[:, -1] == eos):
             break
-    return res
+    return res.type(torch.long)
 
 
 def get_beams(res, probs, prob_k, next_word, beam_size, device):
@@ -89,23 +90,32 @@ def get_beams(res, probs, prob_k, next_word, beam_size, device):
     for i, cur_res in enumerate(res):
         for j, word in enumerate(next_word[i, :]):
             all_res.append(torch.cat([cur_res, word[None]], dim=-1).tolist())
-            all_probs.append(probs[i]*prob_k[i][j].tolist())
+            all_probs.append(probs[i] * prob_k[i][j].tolist())
     all_probs = torch.tensor(all_probs).to(device)
     all_res = torch.tensor(all_res).to(device)
     new_prob, idx = torch.topk(all_probs, beam_size)
     new_res = all_res[idx]
-    print(new_prob, new_res)
+
+    # res = res.repeat_interleave(beam_size, dim=-1)
+    # probs = probs.repeat_interleave(beam_size, dim=-1)
+    # all_probs = probs + prob_k
+    # new_res = torch.cat([res, next_word[:,None]], dim=-1)
+    # _, idx = torch.topk(all_probs, beam_size, dim=-1)
+    # new_prob = torch.gather(all_probs, -1, idx)
+    # new_res = torch.gather(new_res, -1, idx[None].repeat())
+
+    # #print(new_res[0], res[0] , next_word.view(beam_size**2)[0])
     return new_prob, new_res
 
 
 @torch.inference_mode()
 def translate(
-    model: torch.nn.Module,
-    src_sentences: List[str],
-    src_tokenizer: Tokenizer,
-    tgt_tokenizer: Tokenizer,
-    translation_mode: str,
-    device: torch.device,
+        model: torch.nn.Module,
+        src_sentences: List[str],
+        src_tokenizer: Tokenizer,
+        tgt_tokenizer: Tokenizer,
+        translation_mode: str,
+        device: torch.device,
 ) -> List[str]:
     """
     Given a list of sentences, generate their translations.
@@ -126,12 +136,15 @@ def translate(
         padding_value=src_pad
     )
     max_len = src.shape[1]
-
+    # пока берем ток первый бим
     if translation_mode == "greedy":
         src_mask = src == src_pad
         out = _greedy_decode(model, src, max_len, tgt_tokenizer, src_mask, device)
+        out = tgt_tokenizer.decode_batch(list(out.cpu().numpy()))
+
     elif translation_mode == "beam":
         src_mask = src == src_pad
         out = _beam_search_decode_one_batch(model, src, max_len, tgt_tokenizer, device, src_mask, beam_size=5)
-    out = tgt_tokenizer.decode_batch(list(out.cpu().numpy()))
+        o = out[0].unsqueeze(0)
+        out = tgt_tokenizer.decode_batch(list(o.cpu().numpy()))
     return out
