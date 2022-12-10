@@ -192,8 +192,8 @@ def train_model(data_dir, tokenizer_path, num_epochs):
         )
 
         # might be useful to translate some sentences from validation to check your decoding implementation
-        bleu_greedy = translate_test_set(model, data_dir, tokenizer_path)
-        wandb.log({"val_loss": val_loss, "train_loss": train_loss, "epoch": epoch, "blue_test": bleu_greedy})
+        bleu_greedy, bleu_beam = translate_test_set(model, data_dir, tokenizer_path)
+        wandb.log({"val_loss": val_loss, "train_loss": train_loss, "epoch": epoch, "bleu_greedy_test": bleu_greedy, "bleu_first_beam_test": bleu_beam})
 
         # also, save the best checkpoint somewhere around here
         if val_loss < min_val_loss:
@@ -231,8 +231,9 @@ def translate_test_set(model: TranslationModel, data_dir, tokenizer_path):
                 translation_mode='greedy',
                 device=device,
             )
-            greedy_translations.append(out[0])
-            output_file.write(out[0])
+            for o in out:
+                greedy_translations.append(o)
+                output_file.write(o)
 
     beam_translations = []
     with open(data_dir / "test.de.txt") as input_file, open(
@@ -248,8 +249,10 @@ def translate_test_set(model: TranslationModel, data_dir, tokenizer_path):
                 translation_mode='beam',
                 device=device,
             )
-            beam_translations.append(out[0])
-            output_file.write(out[0])
+            #возьмем первый бим
+            for o in out[0]:
+                greedy_translations.append(o)
+                output_file.write(o)
 
     with open(data_dir / "test.en.txt") as input_file:
         references = [line.strip() for line in input_file]
@@ -265,7 +268,7 @@ def translate_test_set(model: TranslationModel, data_dir, tokenizer_path):
     print(f"BLEU with greedy search: {bleu_greedy}, with beam search: {bleu_beam}")
 
     # maybe log to wandb/comet/neptune as well
-    return bleu_greedy
+    return bleu_greedy, bleu_beam
 
 
 if __name__ == "__main__":

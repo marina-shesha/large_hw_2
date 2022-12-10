@@ -73,7 +73,7 @@ def _beam_search_decode_one_batch(
     src_mask = src_mask.repeat(beam_size, 1)
     memory = model.encode(src, src_mask.to(device))
     res = torch.ones(beam_size, 1).fill_(bos).type(torch.long).to(device)
-    probs = torch.ones(beam_size, 1).type(torch.long).to(device)
+    probs = torch.zeros(beam_size, 1).type(torch.long).to(device)
     for j in range(max_len - 1):
         tgt_mask = generate_mask(res.size(1)).to(device)
         out = torch.log_softmax(model.decode(res, memory, tgt_mask), dim=-1)
@@ -95,16 +95,45 @@ def get_beams(res, probs, prob_k, next_word, beam_size, device):
     all_res = torch.tensor(all_res).to(device)
     new_prob, idx = torch.topk(all_probs, beam_size)
     new_res = all_res[idx]
+    return new_prob, new_res
 
-    # res = res.repeat_interleave(beam_size, dim=-1)
-    # probs = probs.repeat_interleave(beam_size, dim=-1)
-    # all_probs = probs + prob_k
-    # new_res = torch.cat([res, next_word[:,None]], dim=-1)
-    # _, idx = torch.topk(all_probs, beam_size, dim=-1)
-    # new_prob = torch.gather(all_probs, -1, idx)
-    # new_res = torch.gather(new_res, -1, idx[None].repeat())
 
-    # #print(new_res[0], res[0] , next_word.view(beam_size**2)[0])
+def _beam_search_decode(
+        model: TranslationModel,
+        src: torch.Tensor,
+        max_len: int,
+        tgt_tokenizer: Tokenizer,
+        device: torch.device,
+        src_mask,
+        beam_size: int,
+) -> torch.Tensor:
+    src = src.to(device)
+    model.to(device)
+    model.eval()
+    bos = tgt_tokenizer.token_to_id("[BOS]")
+    eos = tgt_tokenizer.token_to_id("[EOS]")
+    batch_sz = src.shape[0]
+    memory = model.encode(src, src_mask.to(device))
+    memory = memory.repeat_interleave(beam_size, dim=0)
+    res = torch.ones(batch_sz, beam_size, 1).fill_(bos).type(torch.long).to(device)
+    probs = torch.zeros(batch_sz, beam_size).type(torch.long).to(device)
+    for j in range(max_len - 1):
+        tgt_mask = generate_mask(res.size(-1)).to(device)
+        out = torch.log_softmax(model.decode(res.view(beam_size*batch_sz, -1), memory, tgt_mask), dim=-1)
+        prob_k, next_word = torch.topk(out.view(batch_sz, beam_size, -1), beam_size, dim=-1)
+        probs, res = get_beams_batch(res, probs, prob_k, next_word, beam_size, batch_sz, device)
+        if torch.all(res[:, :, -1] == eos):
+            break
+    return res.type(torch.long)
+
+
+def get_beams_batch(res, probs, prob_k, next_word, beam_size, batch_sz, device):
+    res = res.repeat_interleave(beam_size, dim=1)
+    probs = probs.repeat_interleave(beam_size, dim=1)
+    all_probs = probs + prob_k.view(batch_sz, -1)
+    all_res = torch.cat([res, next_word.view(batch_sz, -1)[:, :, None]], dim=-1)
+    new_prob, idx = torch.topk(all_probs, beam_size, dim=-1)
+    new_res = all_res[np.arange(idx.shape[0]), idx]
     return new_prob, new_res
 
 
@@ -136,15 +165,24 @@ def translate(
         padding_value=src_pad
     )
     max_len = src.shape[1]
-    # пока берем ток первый бим
+
     if translation_mode == "greedy":
         src_mask = src == src_pad
         out = _greedy_decode(model, src, max_len, tgt_tokenizer, src_mask, device)
         out = tgt_tokenizer.decode_batch(list(out.cpu().numpy()))
-
+        detoks = []
+        for o in out:
+            detoks.append(detok.detokenize(o))
+        return detoks
     elif translation_mode == "beam":
+        beam_size = 5
         src_mask = src == src_pad
-        out = _beam_search_decode_one_batch(model, src, max_len, tgt_tokenizer, device, src_mask, beam_size=5)
-        o = out[0].unsqueeze(0)
-        out = tgt_tokenizer.decode_batch(list(o.cpu().numpy()))
-    return out
+        out = _beam_search_decode(model, src, max_len, tgt_tokenizer, device, src_mask, beam_size=beam_size)
+        res = []
+        for i in range(beam_size):
+            dec = tgt_tokenizer.decode_batch(list(out[:, i, :].cpu().numpy()))
+            detoks = []
+            for d in dec:
+                detoks.append(detok.detokenize(d))
+            res.append(detoks)
+        return res
