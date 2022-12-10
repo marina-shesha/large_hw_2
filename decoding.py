@@ -172,7 +172,8 @@ def translate(
         out = tgt_tokenizer.decode_batch(list(out.cpu().numpy()))
         detoks = []
         for o in out:
-            detoks.append(detok.detokenize(o))
+            o = mpn.normalize(o)
+            detoks.append(detok.detokenize(o.split()))
         return detoks
     elif translation_mode == "beam":
         beam_size = 5
@@ -183,6 +184,7 @@ def translate(
             dec = tgt_tokenizer.decode_batch(list(out[:, i, :].cpu().numpy()))
             detoks = []
             for d in dec:
-                detoks.append(detok.detokenize(d))
+                d = mpn.normalize(d)
+                detoks.append(detok.detokenize(d.split()))
             res.append(detoks)
         return res

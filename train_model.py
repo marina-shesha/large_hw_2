@@ -251,7 +251,7 @@ def translate_test_set(model: TranslationModel, data_dir, tokenizer_path):
             )
             #возьмем первый бим
             for o in out[0]:
-                greedy_translations.append(o)
+                beam_translations.append(o)
                 output_file.write(o)
 
     with open(data_dir / "test.en.txt") as input_file:
