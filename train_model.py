@@ -15,6 +15,7 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import OneCycleLR
 from tqdm import tqdm
 
+
 class ModelConfig:
     num_encoder_layers: int = 1
     num_decoder_layers: int = 1
@@ -28,14 +29,14 @@ class ModelConfig:
 
 
 def train_epoch(
-    model: TranslationModel,
-    train_dataloader,
-    scheduler,
-    optimizer,
-    criterion,
-    device,
-    src_tokenizer,
-    tgt_tokenizer,
+        model: TranslationModel,
+        train_dataloader,
+        scheduler,
+        optimizer,
+        criterion,
+        device,
+        src_tokenizer,
+        tgt_tokenizer,
 ):
     # train the model for one epoch
     # you can obviously add new arguments or change the API if it does not suit you
@@ -56,7 +57,7 @@ def train_epoch(
         tgt_padding_mask = (tgt_input == tgt_pad).to(device)
 
         logits = model(src, tgt_input, tgt_mask,
-        src_padding_mask, tgt_padding_mask)
+                       src_padding_mask, tgt_padding_mask)
 
         optimizer.zero_grad()
         tgt_out = tgt[:, 1:]
@@ -75,7 +76,7 @@ def train_epoch(
 
 @torch.inference_mode()
 def evaluate(model: TranslationModel, val_dataloader, criterion, device, src_tokenizer,
-    tgt_tokenizer):
+             tgt_tokenizer):
     # compute the loss over the entire validation subset
     model.eval()
     model.to(device)
@@ -92,7 +93,7 @@ def evaluate(model: TranslationModel, val_dataloader, criterion, device, src_tok
         tgt_padding_mask = (tgt_input == tgt_pad).to(device)
 
         logits = model(src, tgt_input, tgt_mask,
-        src_padding_mask, tgt_padding_mask)
+                       src_padding_mask, tgt_padding_mask)
 
         tgt_out = tgt[:, 1:]
         loss = criterion(logits.reshape(-1, logits.shape[-1]), tgt_out.reshape(-1))
@@ -168,7 +169,8 @@ def train_model(data_dir, tokenizer_path, num_epochs):
     criterion = torch.nn.CrossEntropyLoss(ignore_index=tgt_pad)
     optimizer = Adam(model.parameters(), config.lr)
     scheduler = OneCycleLR(
-        optimizer, max_lr=config.lr, steps_per_epoch=len(train_dataloader), epochs=num_epochs, anneal_strategy="cos", pct_start=0.1
+        optimizer, max_lr=config.lr, steps_per_epoch=len(train_dataloader), epochs=num_epochs, anneal_strategy="cos",
+        pct_start=0.1
     )
 
     for epoch in trange(1, num_epochs + 1):
@@ -193,7 +195,8 @@ def train_model(data_dir, tokenizer_path, num_epochs):
 
         # might be useful to translate some sentences from validation to check your decoding implementation
         bleu_greedy, bleu_beam = translate_test_set(model, data_dir, tokenizer_path)
-        wandb.log({"val_loss": val_loss, "train_loss": train_loss, "epoch": epoch, "bleu_greedy_test": bleu_greedy, "bleu_first_beam_test": bleu_beam})
+        wandb.log({"val_loss": val_loss, "train_loss": train_loss, "epoch": epoch, "bleu_greedy_test": bleu_greedy,
+                   "bleu_first_beam_test": bleu_beam})
 
         # also, save the best checkpoint somewhere around here
         if val_loss < min_val_loss:
@@ -220,7 +223,7 @@ def translate_test_set(model: TranslationModel, data_dir, tokenizer_path):
     tgt_tokenizer = Tokenizer.from_file(str(tokenizer_path / "tokenizer_en.json"))
 
     with open(data_dir / "test.de.txt") as input_file, open(
-        "answers_greedy.txt", "w+"
+            "answers_greedy.txt", "w+"
     ) as output_file:
         for src in input_file:
             out = translate(
@@ -235,9 +238,14 @@ def translate_test_set(model: TranslationModel, data_dir, tokenizer_path):
                 greedy_translations.append(o)
                 output_file.write(o)
 
-    beam_translations = []
+    with open(data_dir / "test.en.txt") as input_file:
+        references = [line.strip() for line in input_file]
+
+    bleu_beams = []
+    max_bleu = 0
+    max_beam_trans = []
     with open(data_dir / "test.de.txt") as input_file, open(
-        "answers_beam.txt", "w+"
+            "answers_beam.txt", "w+"
     ) as output_file:
         # translate with beam search
         for src in input_file:
@@ -249,26 +257,26 @@ def translate_test_set(model: TranslationModel, data_dir, tokenizer_path):
                 translation_mode='beam',
                 device=device,
             )
-            #возьмем первый бим
-            for o in out[0]:
-                beam_translations.append(o)
-                output_file.write(o)
-
-    with open(data_dir / "test.en.txt") as input_file:
-        references = [line.strip() for line in input_file]
+            for i in range(len(out)):
+                beam_translations = []
+                for o in out[i]:
+                    beam_translations.append(o)
+                    output_file.write(o)
+                bleu = BLEU()
+                bleu_beams.append(bleu.corpus_score(beam_translations, [references]).score)
+                if bleu_beams[-1] > max_bleu:
+                    max_bleu = bleu_beams[-1]
+                    max_beam_trans = beam_translations
 
     bleu = BLEU()
     bleu_greedy = bleu.corpus_score(greedy_translations, [references]).score
 
-    #we're recreating the object, as it might cache some stats
+    # we're recreating the object, as it might cache some stats
 
-    bleu = BLEU()
-    bleu_beam = bleu.corpus_score(beam_translations, [references]).score
-
-    print(f"BLEU with greedy search: {bleu_greedy}, with beam search: {bleu_beam}")
+    print(f"BLEU with greedy search: {bleu_greedy}, with beam search: {bleu_beams}")
 
     # maybe log to wandb/comet/neptune as well
-    return bleu_greedy, bleu_beam
+    return bleu_greedy, max_bleu
 
 
 if __name__ == "__main__":
