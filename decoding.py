@@ -54,49 +54,6 @@ def _greedy_decode(
     return res
 
 
-def _beam_search_decode_one_batch(
-        model: TranslationModel,
-        src: torch.Tensor,
-        max_len: int,
-        tgt_tokenizer: Tokenizer,
-        device: torch.device,
-        src_mask,
-        beam_size: int,
-) -> torch.Tensor:
-    src = src.to(device)
-    model.to(device)
-    model.eval()
-    pad = tgt_tokenizer.token_to_id("[PAD]")
-    bos = tgt_tokenizer.token_to_id("[BOS]")
-    eos = tgt_tokenizer.token_to_id("[EOS]")
-    src = src.repeat(beam_size, 1)
-    src_mask = src_mask.repeat(beam_size, 1)
-    memory = model.encode(src, src_mask.to(device))
-    res = torch.ones(beam_size, 1).fill_(bos).type(torch.long).to(device)
-    probs = torch.zeros(beam_size, 1).type(torch.long).to(device)
-    for j in range(max_len - 1):
-        tgt_mask = generate_mask(res.size(1)).to(device)
-        out = torch.log_softmax(model.decode(res, memory, tgt_mask), dim=-1)
-        prob_k, next_word = torch.topk(out, beam_size, dim=-1)
-        probs, res = get_beams(res, probs, prob_k, next_word, beam_size, device)
-        if torch.all(res[:, -1] == eos):
-            break
-    return res.type(torch.long)
-
-
-def get_beams(res, probs, prob_k, next_word, beam_size, device):
-    all_res = []
-    all_probs = []
-    for i, cur_res in enumerate(res):
-        for j, word in enumerate(next_word[i, :]):
-            all_res.append(torch.cat([cur_res, word[None]], dim=-1).tolist())
-            all_probs.append(probs[i] * prob_k[i][j].tolist())
-    all_probs = torch.tensor(all_probs).to(device)
-    all_res = torch.tensor(all_res).to(device)
-    new_prob, idx = torch.topk(all_probs, beam_size)
-    new_res = all_res[idx]
-    return new_prob, new_res
-
 
 def _beam_search_decode(
         model: TranslationModel,
@@ -114,26 +71,34 @@ def _beam_search_decode(
     eos = tgt_tokenizer.token_to_id("[EOS]")
     batch_sz = src.shape[0]
     memory = model.encode(src, src_mask.to(device))
-    memory = memory.repeat_interleave(beam_size, dim=0)
-    res = torch.ones(batch_sz, beam_size, 1).fill_(bos).type(torch.long).to(device)
-    probs = torch.zeros(batch_sz, beam_size).type(torch.long).to(device)
+    res = torch.ones(batch_sz, 1, 1).fill_(bos).type(torch.long).to(device)
+    probs = torch.zeros(batch_sz, 1).type(torch.long).to(device)
     for j in range(max_len - 1):
+        beam_sz = res.shape[1]
+        memory_beam = memory.repeat_interleave(beam_sz, dim=0)
         tgt_mask = generate_mask(res.size(-1)).to(device)
-        out = torch.log_softmax(model.decode(res.view(beam_size*batch_sz, -1), memory, tgt_mask), dim=-1)
-        prob_k, next_word = torch.topk(out.view(batch_sz, beam_size, -1), beam_size, dim=-1)
-        probs, res = get_beams_batch(res, probs, prob_k, next_word, beam_size, batch_sz, device)
+        out = torch.log_softmax(model.decode(res.view(beam_sz*batch_sz, -1), memory_beam, tgt_mask), dim=-1)
+        #prob_k, next_word = torch.topk(out.view(batch_sz, beam_sz, -1), beam_size, dim=-1)
+        probs, res = get_beams_batch(out, res, probs, beam_size, batch_sz, device)
         if torch.all(res[:, :, -1] == eos):
             break
-    return res.type(torch.long)
+    return res[:, 0, :].type(torch.long)
 
 
-def get_beams_batch(res, probs, prob_k, next_word, beam_size, batch_sz, device):
-    res = res.repeat_interleave(beam_size, dim=1)
-    probs = probs.repeat_interleave(beam_size, dim=1)
-    all_probs = probs + prob_k.view(batch_sz, -1)
-    all_res = torch.cat([res, next_word.view(batch_sz, -1)[:, :, None]], dim=-1)
-    new_prob, idx = torch.topk(all_probs, beam_size, dim=-1)
-    new_res = all_res[np.arange(idx.shape[0]), idx]
+def get_beams_batch(out, res, probs, beam_size, batch_sz, device):
+    beam_sz = res.shape[1]
+    #print(probs.shape, out.shape)
+    all_probs = probs.unsqueeze(2) + out
+    ln = all_probs.shape[-1]
+    all_probs = all_probs.view(batch_sz, -1)
+    new_prob, ind = torch.topk(all_probs, beam_size, dim=-1)
+    res_ind = (ind // ln).unsqueeze(2).expand(-1,-1, res.shape[-1])
+    word_ind = (ind % ln).unsqueeze(2)
+
+    new_res = res.gather(1, res_ind)
+
+    new_res = torch.cat([new_res, word_ind], dim = -1)
+    #print(new_prob.shape, new_res.shape)
     return new_prob, new_res
 
 
@@ -176,15 +141,11 @@ def translate(
             detoks.append(detok.detokenize(o.split()))
         return detoks
     elif translation_mode == "beam":
-        beam_size = 5
         src_mask = src == src_pad
+        beam_size = 5
         out = _beam_search_decode(model, src, max_len, tgt_tokenizer, device, src_mask, beam_size=beam_size)
-        res = []
-        for i in range(beam_size):
-            dec = tgt_tokenizer.decode_batch(list(out[:, i, :].cpu().numpy()))
-            detoks = []
-            for d in dec:
-                d = mpn.normalize(d)
-                detoks.append(detok.detokenize(d.split()))
-            res.append(detoks)
-        return res
+        detoks = []
+        for o in out:
+            o = mpn.normalize(o)
+            detoks.append(detok.detokenize(o.split()))
+        return detoks

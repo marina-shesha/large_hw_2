@@ -242,8 +242,8 @@ def translate_test_set(model: TranslationModel, data_dir, tokenizer_path):
         references = [line.strip() for line in input_file]
 
     bleu_beams = []
-    max_bleu = 0
-    max_beam_trans = []
+    beam_translations = []
+
     with open(data_dir / "test.de.txt") as input_file, open(
             "answers_beam.txt", "w+"
     ) as output_file:
@@ -257,26 +257,22 @@ def translate_test_set(model: TranslationModel, data_dir, tokenizer_path):
                 translation_mode='beam',
                 device=device,
             )
-            for i in range(len(out)):
-                beam_translations = []
-                for o in out[i]:
-                    beam_translations.append(o)
-                    output_file.write(o)
-                bleu = BLEU()
-                bleu_beams.append(bleu.corpus_score(beam_translations, [references]).score)
-                if bleu_beams[-1] > max_bleu:
-                    max_bleu = bleu_beams[-1]
-                    max_beam_trans = beam_translations
+
+            for o in out:
+                beam_translations.append(o)
+                output_file.write(o)
 
     bleu = BLEU()
     bleu_greedy = bleu.corpus_score(greedy_translations, [references]).score
 
     # we're recreating the object, as it might cache some stats
+    bleu = BLEU()
+    bleu_beam = bleu.corpus_score(beam_translations, [references]).score
 
-    print(f"BLEU with greedy search: {bleu_greedy}, with beam search: {bleu_beams}")
+    print(f"BLEU with greedy search: {bleu_greedy}, with beam search: {bleu_beam}")
 
     # maybe log to wandb/comet/neptune as well
-    return bleu_greedy, max_bleu
+    return bleu_greedy, bleu_beam
 
 
 if __name__ == "__main__":
