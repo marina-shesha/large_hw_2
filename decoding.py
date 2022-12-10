@@ -144,6 +144,7 @@ def translate(
         src_mask = src == src_pad
         beam_size = 5
         out = _beam_search_decode(model, src, max_len, tgt_tokenizer, device, src_mask, beam_size=beam_size)
+        out = tgt_tokenizer.decode_batch(list(out.cpu().numpy()))
         detoks = []
         for o in out:
             o = mpn.normalize(o)
