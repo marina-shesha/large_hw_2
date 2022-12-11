@@ -54,7 +54,6 @@ def _greedy_decode(
     return res
 
 
-
 def _beam_search_decode(
         model: TranslationModel,
         src: torch.Tensor,
