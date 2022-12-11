@@ -87,16 +87,16 @@ def _beam_search_decode(
 def get_beams_batch(out, res, probs, beam_size, batch_sz, device):
     beam_sz = res.shape[1]
     #print(probs.shape, out.shape)
-    all_probs = probs.unsqueeze(2) + out
+    all_probs = probs.unsqueeze(2) + out.view(batch_sz, beam_sz, -1)
     ln = all_probs.shape[-1]
     all_probs = all_probs.view(batch_sz, -1)
     new_prob, ind = torch.topk(all_probs, beam_size, dim=-1)
-    res_ind = (ind // ln).unsqueeze(2).expand(-1,-1, res.shape[-1])
+    res_ind = (ind // ln).unsqueeze(2).expand(-1, -1, res.shape[-1])
     word_ind = (ind % ln).unsqueeze(2)
 
     new_res = res.gather(1, res_ind)
 
-    new_res = torch.cat([new_res, word_ind], dim = -1)
+    new_res = torch.cat([new_res, word_ind], dim=-1)
     #print(new_prob.shape, new_res.shape)
     return new_prob, new_res
 
