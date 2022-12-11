@@ -3,6 +3,9 @@ from torch import Tensor
 import torch
 import math
 
+#за основу быз взят https://pytorch.org/tutorials/beginner/translation_transformer.html
+
+
 class PositionalEncoding(nn.Module):
 
     def __init__(self, embed_dim, max_len: int = 5000):
